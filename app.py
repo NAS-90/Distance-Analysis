@@ -1,4 +1,6 @@
 import streamlit as st
+import munvest_theme as _mv
+_mv.install("Munvest Distance Analysis")
 import pandas as pd
 import os
 
@@ -16,7 +18,9 @@ from dashboard.viz import (
 )
 
 st.set_page_config(page_title="Strategic Product Optimizer", layout="wide")
+_mv.header("Portfolio Distance Analysis")
 st.title("Product Portfolio Analysis")
+st.caption("How similar are your products in the eyes of the market? Identify cannibalisation, overlap and white space across the portfolio.")
 
 # Sidebar for category selection
 category = st.sidebar.selectbox(
@@ -36,7 +40,8 @@ pre_path = os.path.join(base_path, "preprocessed_output.csv")
 if os.path.exists(summary_path):
     with open(summary_path, 'r') as f:
         summary_text = f.read()
-    st.sidebar.info(f"**Category Summary:**\n\n{summary_text}")
+    with st.sidebar.expander("Category summary (technical)", expanded=False):
+        st.code(summary_text)
 
 # --- PRE-LOAD NUMERIC DATA (needed for feature comparison + PCA) ---
 pre = None
@@ -85,7 +90,16 @@ if os.path.exists(nn_path):
             diffs = (p1_specs - p2_specs).abs().sort_values()
 
         # Display Alerts with Strategic Business Insights
-        if top_neighbor_dist < 0.05:
+        import numpy as _np
+        _t1, _t2 = 0.05, 0.50
+        try:
+            _r1 = nn_df[nn_df.iloc[:, 1] == 1].iloc[:, 3].astype(float)
+            _r1 = _r1[_np.isfinite(_r1) & (_r1 > 0)]
+            if len(_r1) >= 10:
+                _t1, _t2 = float(_np.percentile(_r1, 10)), float(_np.percentile(_r1, 50))
+        except Exception:
+            pass
+        if top_neighbor_dist < _t1:
             st.error(f"🔴 Cannibalization Risk (Dist: {top_neighbor_dist:.4f})")
             st.markdown(
                 f"**{selected_product}** and **{closest_neighbor_name}** are near-identical in the market. "
@@ -97,7 +111,7 @@ if os.path.exists(nn_path):
                 st.markdown("**💡 Recommendation:** Consider rationalizing/removing one product from the portfolio. "
                            "Consolidating into a single SKU can reduce costs and strengthen positioning.")
 
-        elif top_neighbor_dist < 0.50:
+        elif top_neighbor_dist < _t2:
             st.warning(f"🟡 Significant Overlap (Dist: {top_neighbor_dist:.4f})")
             st.markdown(
                 f"**{selected_product}** competes closely with **{closest_neighbor_name}**. "
@@ -126,7 +140,7 @@ if os.path.exists(nn_path):
                 st.markdown("**💡 Recommendation:** Invest in distribution and marketing to maximize reach. "
                            "This product fills a unique gap in the portfolio — protect and develop it.")
 
-        st.caption("Alert Logic: 🔴 Cannibalization < 0.05 | 🟡 Overlap < 0.50 | 🟢 Unique > 0.50")
+        st.caption(f"Alert logic (relative to this portfolio): Cannibalization < {_t1:.3f} (closest 10% of nearest-neighbour gaps) | Overlap < {_t2:.3f} (median) | Unique above")
 
     # --- Task 2 Visualizations ---
     if dm is not None and pre is not None:
@@ -254,3 +268,5 @@ if os.path.exists(nn_path):
                     st.write("Gaps:", ", ".join(result.get('gaps', [])))
         else:
             st.error("Distance matrix not available. Cannot run simulation.")
+
+_mv.footer()
